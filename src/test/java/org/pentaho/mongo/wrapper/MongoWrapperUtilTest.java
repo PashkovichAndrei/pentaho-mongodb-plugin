@@ -20,16 +20,22 @@ package org.pentaho.mongo.wrapper;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.internal.util.reflection.Whitebox;
 import org.pentaho.di.core.logging.LogChannelInterface;
 import org.pentaho.di.core.variables.VariableSpace;
+import org.pentaho.di.core.variables.Variables;
 import org.pentaho.di.trans.steps.mongodb.MongoDbMeta;
 import org.pentaho.mongo.MongoDbException;
+import org.pentaho.mongo.MongoProp;
 import org.pentaho.mongo.MongoProperties;
 
 import java.util.Arrays;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -37,6 +43,9 @@ import static org.mockito.Mockito.when;
  * Created by bryan on 8/22/14.
  */
 public class MongoWrapperUtilTest {
+  public static final String SOCKET_TIMEOUT = "mongoDbSocketTimeout";
+  public static final String CONNECTION_TIMEOUT = "mongoDbConnectionTimeout";
+
   private MongoWrapperClientFactory cachedFactory;
   private MongoWrapperClientFactory mockFactory;
 
@@ -73,5 +82,30 @@ public class MongoWrapperUtilTest {
         .thenReturn( wrapper );
     assertEquals( wrapper,
         MongoWrapperUtil.createMongoClientWrapper( mongoDbMeta, variableSpace, logChannelInterface ) );
+  }
+
+  @Test public void testCreatePropertiesBuilder() {
+    MongoDbMeta mongoDbMeta = mock(MongoDbMeta.class);
+    doCallRealMethod().when( mongoDbMeta ).setConnectTimeout( any( String.class ) );
+    doCallRealMethod().when( mongoDbMeta ).getConnectTimeout();
+    doCallRealMethod().when( mongoDbMeta ).setSocketTimeout( any( String.class ) );
+    doCallRealMethod().when( mongoDbMeta ).getSocketTimeout();
+
+    VariableSpace vars = mock(Variables.class);
+    doCallRealMethod().when( vars ).environmentSubstitute( any( String.class ) );
+    Whitebox.setInternalState(vars, "properties", mongoPropertiesStub());
+
+    mongoDbMeta.setConnectTimeout( "${" + CONNECTION_TIMEOUT + "}" );
+    mongoDbMeta.setSocketTimeout( "${" + SOCKET_TIMEOUT + "}" );
+    MongoProperties properties = MongoWrapperUtil.createPropertiesBuilder( mongoDbMeta, vars ).build();
+    assertEquals( "200" , properties.get( MongoProp.connectTimeout ) );
+    assertEquals( "500" , properties.get( MongoProp.socketTimeout ) );
+  }
+
+  private Map<String, String> mongoPropertiesStub() {
+    Map<String, String> result = new ConcurrentHashMap<String, String>();
+    result.put(CONNECTION_TIMEOUT, "200");
+    result.put(SOCKET_TIMEOUT, "500");
+    return result;
   }
 }
